@@ -38,6 +38,14 @@ class Server(BaseHTTPRequestHandler):
             data['speed'] = str(psutil.cpu_freq())
 
             self.wfile.write(json.dumps(data).encode())
+
+        elif self.path == '/api/1.0/network':
+            # respond with network statistics
+            data = {}
+            json_data = json.dumps(data)
+            data['inetlatency'] = ping()
+
+            self.wfile.write(json.dumps(data).encode())
     
         elif self.path == '/api/1.0/mem':
             # respomnd with MEM statistics
@@ -77,8 +85,29 @@ class Server(BaseHTTPRequestHandler):
             data['/api/1.0/mem'] = 'get mem statistics'
             data['/api/1.0/disk'] = 'get disk statistics'
             data['/api/1.0/sensor'] = 'get sensor statistics'
+            data['/api/1.0/network'] = 'get network statistics'
 
             self.wfile.write(json.dumps(data).encode())
+
+def ping(server='8.8.8.8', count=1, wait_sec=1):
+    """
+
+    :rtype: dict or None
+    """
+    cmd = "ping -c {} -W {} {}".format(count, wait_sec, server).split(' ')
+    try:
+        output = subprocess.check_output(cmd).decode().strip()
+        lines = output.split("\n")
+        total = lines[-2].split(',')[3].split()[1]
+        loss = lines[-2].split(',')[2].split()[0]
+        timing = lines[-1].split()[3].split('/')
+        
+        # just return the avg latency for this routine
+        return timing[1]        
+
+    except Exception as e:
+        print(e)
+        return None
 
 def run(server_class=HTTPServer, handler_class=Server, port=8008):
     server_address = ('', port)
