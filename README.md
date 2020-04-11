@@ -1,2 +1,2 @@
 # SimpleAPI
-Simple API to expose host hardware information. Requires plutil and istats (macOS)
+Simple API to expose host hardware information. Requires psutil and istats (macOS)
