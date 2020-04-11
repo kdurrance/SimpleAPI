@@ -15,7 +15,7 @@ class Server(BaseHTTPRequestHandler):
     def do_HEAD(self):
         self._set_headers()
         
-    # GET sends back a Hello world message
+    # GET
     def do_GET(self):
         self._set_headers()
 
