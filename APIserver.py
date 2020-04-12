@@ -139,12 +139,6 @@ def authenticate(url):
             return False
     else:
        return False
-  
-def get_query_field(url, field):
-    try:
-        return parse_qs(urlparse(url).query)[field]
-    except KeyError:
-        return []
 
 def ping(server='8.8.8.8', count=1, wait_sec=1):
     """
