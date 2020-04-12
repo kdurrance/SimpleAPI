@@ -1,12 +1,16 @@
 from http.server import BaseHTTPRequestHandler,HTTPServer
-import socketserver
 import json
-import cgi
 import psutil
 import subprocess
 import time
 
+# Default api_key if none is passed on command line
+global_api_key = 'e8867de3-744d-49c0-a21f-e08528238ad6'
+global_version = '0.9'
+global_name = 'Host information API'
+
 class Server(BaseHTTPRequestHandler):
+
     def _set_headers(self):
         self.send_response(200)
         self.send_header('Content-type', 'application/json')
@@ -19,75 +23,128 @@ class Server(BaseHTTPRequestHandler):
     def do_GET(self):
         self._set_headers()
 
-	# check the url string and respond with the appropriate json blob
-        if self.path == '/api/1.0/system':
-            # respond with system statistics
+        # check for a api_key qwuery string, otherwise exit with an authentication error
+        if not "api_key" in self.path:
+            # no api_key passed in url
             data = {}
             json_data = json.dumps(data)
-            data['boottime'] = str(psutil.boot_time())
-            data['uptime'] = str(round(time.time() - psutil.boot_time(), 2))
-
-            self.wfile.write(json.dumps(data).encode())
-
-        elif self.path == '/api/1.0/cpu':
-            # respond with CPU statistics
-            data = {}
-            json_data = json.dumps(data)
-            data['percent'] = str(psutil.cpu_percent())
-            data['count'] = str(psutil.cpu_count())
-            data['speed'] = str(psutil.cpu_freq())
-
-            self.wfile.write(json.dumps(data).encode())
-
-        elif self.path == '/api/1.0/network':
-            # respond with network statistics
-            data = {}
-            json_data = json.dumps(data)
-            data['inetlatency'] = ping()
-
-            self.wfile.write(json.dumps(data).encode())
-    
-        elif self.path == '/api/1.0/mem':
-            # respomnd with MEM statistics
-            data = {}
-            json_data = json.dumps(data)
-            data['percent'] = str(psutil.virtual_memory()[2])
-
-            self.wfile.write(json.dumps(data).encode())
-
-        elif self.path == '/api/1.0/disk':
-            # respond with disk statistics
-            data = {}
-            json_data = json.dumps(data)
-
-            partitions = psutil.disk_partitions()
-            for p in partitions:
-                data[p.mountpoint] = str(psutil.disk_usage(p.mountpoint).percent) 
-
-            self.wfile.write(json.dumps(data).encode())
-
-        elif self.path == '/api/1.0/sensor':
-            # respond with sensor statistics - hacky reliance on istats and subprocess..
-            data = {}
-            json_data = json.dumps(data)
-            data['cputemp'] = str(subprocess.check_output(["/usr/local/bin/istats", "--no-graph", "--value-only",  "cpu"]).decode("utf-8")).strip()
-            data['fanspeed'] = str(subprocess.check_output(["/usr/local/bin/istats", "--no-graph", "--value-only",  "fan"]).decode("utf-8")).strip()
-            data['battery'] = str(subprocess.check_output(["/usr/local/bin/istats", "--no-graph", "--value-only",  "battery"]).decode("utf-8")).strip()
+            data['unauthorised'] = 'bad api_key'
+            data['version'] = global_version
+            data['product'] = global_name
 
             self.wfile.write(json.dumps(data).encode())
 
         else:
-            # unknown request, respond with enabled commands
-            data = {}
-            json_data = json.dumps(data)
-            data['/api/1.0/system'] = 'get system statistics'
-            data['/api/1.0/cpu'] = 'get cpu statistics'
-            data['/api/1.0/mem'] = 'get mem statistics'
-            data['/api/1.0/disk'] = 'get disk statistics'
-            data['/api/1.0/sensor'] = 'get sensor statistics'
-            data['/api/1.0/network'] = 'get network statistics'
+            # validate the api_key value
+            authorised = authenticate(self.path)
 
-            self.wfile.write(json.dumps(data).encode())
+            if not authorised == True:
+                # bad api_key passed in url
+                data = {}
+                json_data = json.dumps(data)
+                data['unauthorised'] = 'bad api_key'
+                data['version'] = global_version
+                data['product'] = global_name 
+
+                self.wfile.write(json.dumps(data).encode())
+
+            else:
+                # valid API key, process the request
+                # remove the query string
+                requesturl = self.path.split('?',maxsplit=1)[0]
+                print (requesturl)
+
+	        # check the request string and respond with the appropriate json blob
+                if requesturl == '/api/1.0/system':
+                    # respond with system statistics
+                    data = {}
+                    json_data = json.dumps(data)
+                    data['boottime'] = str(psutil.boot_time())
+                    data['uptime'] = str(round(time.time() - psutil.boot_time(), 2))
+
+                    self.wfile.write(json.dumps(data).encode())
+
+                elif requesturl == '/api/1.0/cpu':
+                    # respond with CPU statistics
+                    data = {}
+                    json_data = json.dumps(data)
+                    data['percent'] = str(psutil.cpu_percent())
+                    data['count'] = str(psutil.cpu_count())
+                    data['speed'] = str(psutil.cpu_freq())
+
+                    self.wfile.write(json.dumps(data).encode())
+
+                elif requesturl == '/api/1.0/network':
+                    # respond with network statistics
+                    data = {}
+                    json_data = json.dumps(data)
+                    data['inetlatency'] = ping()
+
+                    self.wfile.write(json.dumps(data).encode())
+    
+                elif requesturl == '/api/1.0/mem':
+                    # respomnd with MEM statistics
+                    data = {}
+                    json_data = json.dumps(data)
+                    data['percent'] = str(psutil.virtual_memory()[2])
+
+                    self.wfile.write(json.dumps(data).encode())
+
+                elif requesturl == '/api/1.0/disk':
+                    # respond with disk statistics
+                    data = {}
+                    json_data = json.dumps(data)
+
+                    partitions = psutil.disk_partitions()
+                    for p in partitions:
+                        data[p.mountpoint] = str(psutil.disk_usage(p.mountpoint).percent) 
+
+                    self.wfile.write(json.dumps(data).encode())
+
+                elif requesturl == '/api/1.0/sensor':
+                    # respond with sensor statistics - hacky reliance on istats and subprocess..
+                    data = {}
+                    json_data = json.dumps(data)
+                    data['cputemp'] = str(subprocess.check_output(["/usr/local/bin/istats", "--no-graph", "--value-only",  "cpu"]).decode("utf-8")).strip()
+                    data['fanspeed'] = str(subprocess.check_output(["/usr/local/bin/istats", "--no-graph", "--value-only",  "fan"]).decode("utf-8")).strip()
+                    data['battery'] = str(subprocess.check_output(["/usr/local/bin/istats", "--no-graph", "--value-only",  "battery"]).decode("utf-8")).strip()
+
+                    self.wfile.write(json.dumps(data).encode())
+
+                else:
+                    # unknown request, respond with enabled commands
+                    data = {}
+                    json_data = json.dumps(data)
+                    data['/api/1.0/system'] = 'get system statistics'
+                    data['/api/1.0/cpu'] = 'get cpu statistics'
+                    data['/api/1.0/mem'] = 'get mem statistics'
+                    data['/api/1.0/disk'] = 'get disk statistics'
+                    data['/api/1.0/sensor'] = 'get sensor statistics'
+                    data['/api/1.0/network'] = 'get network statistics'
+                    data['version'] = global_version
+                    data['product'] = global_name 
+
+                    self.wfile.write(json.dumps(data).encode())
+
+def authenticate(url):
+    import urllib.parse as urlparse
+    from urllib.parse import parse_qs
+    parsed = urlparse.urlparse(url)
+
+    query = parse_qs(parsed.query)
+    if 'api_key' in query:
+        if global_api_key == query['api_key'][0]:
+            return True
+        else:
+            return False
+    else:
+       return False
+  
+def get_query_field(url, field):
+    try:
+        return parse_qs(urlparse(url).query)[field]
+    except KeyError:
+        return []
 
 def ping(server='8.8.8.8', count=1, wait_sec=1):
     """
@@ -109,11 +166,18 @@ def ping(server='8.8.8.8', count=1, wait_sec=1):
         print(e)
         return None
 
-def run(server_class=HTTPServer, handler_class=Server, port=8008):
+def run(server_class=HTTPServer, handler_class=Server, port=8008, apikey=''):
+    global global_api_key
+
+    # set the api_key for authentication
+    if apikey != '':
+        global_api_key = apikey
+
     server_address = ('', port)
     httpd = server_class(server_address, handler_class)
     
-    print ('Starting httpd on port %d...' % port)
+    print ('Starting httpd on port %d' % port)
+    print ('Authenticated with api_key ' +  global_api_key)
     httpd.serve_forever()
     
 if __name__ == "__main__":
@@ -121,5 +185,9 @@ if __name__ == "__main__":
     
     if len(argv) == 2:
         run(port=int(argv[1]))
+
+    elif len(argv) == 3:
+        run(port=int(argv[1]), apikey=str(argv[2]))
+        
     else:
         run()
