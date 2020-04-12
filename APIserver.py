@@ -23,7 +23,7 @@ class Server(BaseHTTPRequestHandler):
     def do_GET(self):
         self._set_headers()
 
-        # check for a api_key qwuery string, otherwise exit with an authentication error
+        # check for a api_key query string, otherwise exit with an authentication error
         if not "api_key" in self.path:
             # no api_key passed in url
             data = {}
