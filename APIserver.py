@@ -129,10 +129,6 @@ def authenticate(url):
        return False
   
 def ping(server='8.8.8.8', count=1, wait_sec=1):
-    """
-
-    :rtype: dict or None
-    """
     cmd = "ping -c {} -W {} {}".format(count, wait_sec, server).split(' ')
     try:
         output = subprocess.check_output(cmd).decode().strip()
