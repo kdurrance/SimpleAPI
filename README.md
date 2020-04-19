@@ -6,7 +6,7 @@ API requires authentication via a simple api_key, which autogenerates on start, 
 # Running the server
 Optional command line parameters of (1) TCP Port number, defaults to port 8008 if no argument is passed. 
 
-Python3 ./APIServer.py [8008]
+Python3 ./APIserver.py [8008]
 
 # Supported request URLs:
 - http://localhost:8008/api/1.0/cpu?api_key=[apikeytext]
