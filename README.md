@@ -1,7 +1,7 @@
 # SimpleAPI
 Simple API to expose host hardware information. Requires psutil and istats (macOS)
 
-API requires authentication via a simple api_key, which autogenerates on start, creating an "api.key" file in the same directory as the running script.
+API requires authentication via a api_key, which autogenerates on start, creating an "api.key" file in the same directory as the running script.
 
 # Running the server
 Optional command line parameters of (1) TCP Port number, defaults to port 8008 if no argument is passed. 
