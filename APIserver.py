@@ -145,6 +145,7 @@ def getapikey():
 
     with open(keyfile, 'r') as key_file:
         global_api_key = key_file.read().replace('\n', '').strip()
+        key_file.close()
 
 def ping(server='8.8.8.8', count=1, wait_sec=1):
     cmd = "ping -c {} -W {} {}".format(count, wait_sec, server).split(' ')
