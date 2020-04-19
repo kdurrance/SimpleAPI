@@ -4,8 +4,8 @@ import psutil
 import subprocess
 import time
 
-# Default api_key if none is passed on command line
-global_api_key = 'e8867de3-744d-49c0-a21f-e08528238ad6'
+# global variables
+global_api_key = ''
 global_version = '1.0'
 global_name = 'Host information API'
 
@@ -127,7 +127,25 @@ def authenticate(url):
             return False
     else:
        return False
-  
+
+def getapikey():
+    # routine to get the api_key, if none exists then create one
+    import os, secrets
+    global global_api_key
+
+    # expects the api.key file to be in same directory as this script
+    keyfile = os.path.dirname(os.path.abspath(__file__)) + '/api.key'
+    print ('api_key file: ' + keyfile)
+    if not os.path.exists(keyfile):
+        # create an api.key file
+        api_key = secrets.token_urlsafe(16)
+        with open(keyfile, 'wt') as key_file:
+            key_file.write(api_key)
+            key_file.close()
+
+    with open(keyfile, 'r') as key_file:
+        global_api_key = key_file.read().replace('\n', '').strip()
+
 def ping(server='8.8.8.8', count=1, wait_sec=1):
     cmd = "ping -c {} -W {} {}".format(count, wait_sec, server).split(' ')
     try:
@@ -145,11 +163,8 @@ def ping(server='8.8.8.8', count=1, wait_sec=1):
         return None
 
 def run(server_class=HTTPServer, handler_class=Server, port=8008, apikey=''):
-    global global_api_key
-
     # set the api_key for authentication
-    if apikey != '':
-        global_api_key = apikey
+    getapikey()
 
     server_address = ('', port)
     httpd = server_class(server_address, handler_class)
@@ -163,9 +178,6 @@ if __name__ == "__main__":
     
     if len(argv) == 2:
         run(port=int(argv[1]))
-
-    elif len(argv) == 3:
-        run(port=int(argv[1]), apikey=str(argv[2]))
         
     else:
         run()
