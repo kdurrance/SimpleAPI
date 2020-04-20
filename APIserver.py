@@ -170,8 +170,9 @@ def run(server_class=HTTPServer, handler_class=Server, port=8008, apikey=''):
     server_address = ('', port)
     httpd = server_class(server_address, handler_class)
     
-    print ('Starting httpd on port %d' % port)
-    print ('Authenticated with api_key ' +  global_api_key)
+    print ('Starting httpd on port:' + str(port))
+    print ('Authenticated with api_key:' +  global_api_key)
+    print ('Help endpoint: http://localhost:' + str(port) + '/api/1.0/help?api_key=' + global_api_key) 
     httpd.serve_forever()
     
 if __name__ == "__main__":
