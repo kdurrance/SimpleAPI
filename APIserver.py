@@ -3,11 +3,17 @@ import json
 import psutil
 import subprocess
 import time
+import threading
 
 # global variables
 global_api_key = ''
 global_version = '1.0'
 global_name = 'Host information API'
+global_network_rates = {}
+global_network_latency = '?'
+global_cpu_temp = ''
+global_fan_speed = ''
+global_battery_status = ''
 
 class Server(BaseHTTPRequestHandler):
 
@@ -29,7 +35,6 @@ class Server(BaseHTTPRequestHandler):
         if not authorised == True:
             # bad api_key passed in url
             data = {}
-            json_data = json.dumps(data)
             data['unauthorised'] = 'bad api_key'
             data['version'] = global_version
             data['product'] = global_name 
@@ -45,7 +50,6 @@ class Server(BaseHTTPRequestHandler):
             if requesturl == '/api/1.0/system':
                 # respond with system statistics
                 data = {}
-                json_data = json.dumps(data)
                 data['boottime'] = str(psutil.boot_time())
                 data['uptime'] = str(round(time.time() - psutil.boot_time(), 2))
 
@@ -54,7 +58,6 @@ class Server(BaseHTTPRequestHandler):
             elif requesturl == '/api/1.0/cpu':
                 # respond with CPU statistics
                 data = {}
-                json_data = json.dumps(data)
                 data['percent'] = str(psutil.cpu_percent())
                 data['count'] = str(psutil.cpu_count())
                 data['speed'] = str(psutil.cpu_freq())
@@ -64,15 +67,14 @@ class Server(BaseHTTPRequestHandler):
             elif requesturl == '/api/1.0/network':
                 # respond with network statistics
                 data = {}
-                json_data = json.dumps(data)
-                data['inetlatency'] = ping()
+                data['inetlatency'] = global_network_latency
+                data['bandwidth'] = global_network_rates
 
                 self.wfile.write(json.dumps(data).encode())
     
             elif requesturl == '/api/1.0/mem':
                 # respomnd with MEM statistics
                 data = {}
-                json_data = json.dumps(data)
                 data['percent'] = str(psutil.virtual_memory()[2])
 
                 self.wfile.write(json.dumps(data).encode())
@@ -80,7 +82,6 @@ class Server(BaseHTTPRequestHandler):
             elif requesturl == '/api/1.0/disk':
                 # respond with disk statistics
                 data = {}
-                json_data = json.dumps(data)
 
                 partitions = psutil.disk_partitions()
                 for p in partitions:
@@ -91,17 +92,15 @@ class Server(BaseHTTPRequestHandler):
             elif requesturl == '/api/1.0/sensor':
                 # respond with sensor statistics - hacky reliance on istats and subprocess..
                 data = {}
-                json_data = json.dumps(data)
-                data['cputemp'] = str(subprocess.check_output(["/usr/local/bin/istats", "--no-graph", "--value-only",  "cpu"]).decode("utf-8")).strip()
-                data['fanspeed'] = str(subprocess.check_output(["/usr/local/bin/istats", "--no-graph", "--value-only",  "fan"]).decode("utf-8")).strip()
-                data['battery'] = str(subprocess.check_output(["/usr/local/bin/istats", "--no-graph", "--value-only",  "battery"]).decode("utf-8")).strip()
+                data['cputemp'] = global_cpu_temp
+                data['fanspeed'] = global_fan_speed
+                data['battery'] = global_battery_status
 
                 self.wfile.write(json.dumps(data).encode())
 
             else:
                 # unknown request, respond with enabled commands
                 data = {}
-                json_data = json.dumps(data)
                 data['/api/1.0/system'] = 'get system statistics'
                 data['/api/1.0/cpu'] = 'get cpu statistics'
                 data['/api/1.0/mem'] = 'get mem statistics'
@@ -147,23 +146,92 @@ def getapikey():
         global_api_key = key_file.read().replace('\n', '').strip()
         key_file.close()
 
-def ping(server='8.8.8.8', count=1, wait_sec=1):
-    cmd = "ping -c {} -W {} {}".format(count, wait_sec, server).split(' ')
-    try:
-        output = subprocess.check_output(cmd).decode().strip()
-        lines = output.split("\n")
-        total = lines[-2].split(',')[3].split()[1]
-        loss = lines[-2].split(',')[2].split()[0]
-        timing = lines[-1].split()[3].split('/')
-        
-        # just return the avg latency for this routine
-        return timing[1]        
+def cputemp():
+    global global_cpu_temp
+    while True:
+        global_cpu_temp = str(subprocess.check_output(["/usr/local/bin/istats", "--no-graph", "--value-only",  "cpu"]).decode("utf-8")).strip()
+        time.sleep(30)
 
-    except Exception as e:
-        print(e)
-        return None
+def fanspeed():
+    global global_fan_speed
+    while True:
+        global_fan_speed = str(subprocess.check_output(["/usr/local/bin/istats", "--no-graph", "--value-only",  "fan"]).decode("utf-8")).strip()
+        time.sleep(30)
+
+def batterystatus():
+    global global_battery_status
+    while True:
+        global_battery_status = str(subprocess.check_output(["/usr/local/bin/istats", "--no-graph", "--value-only",  "battery"]).decode("utf-8")).strip()
+        time.sleep(30)
+
+def ping(server='8.8.8.8', count=3, wait_time=1):
+    global global_network_latency
+    cmd = "ping -c {} -W {} {}".format(count, wait_time, server).split(' ')
+
+    while True:
+        try:
+            output = subprocess.check_output(cmd).decode().strip()
+            lines = output.split("\n")
+            total = lines[-2].split(',')[3].split()[1]
+            loss = lines[-2].split(',')[2].split()[0]
+            timing = lines[-1].split()[3].split('/')
+          
+            # just return the avg latency for this routine
+            latency = timing[1]
+            global_network_latency = timing[1]
+            time.sleep(3)
+
+        except Exception as e:
+            print(e)
+
+def calc_ul_dl(dt=3, interface='en0'):
+    global global_network_rates
+    t0 = time.time()
+    counter = psutil.net_io_counters(pernic=True)[interface]
+    tot = (counter.bytes_sent, counter.bytes_recv)
+
+    while True:
+        last_tot = tot
+        time.sleep(dt)
+        counter = psutil.net_io_counters(pernic=True)[interface]
+        t1 = time.time()
+        tot = (counter.bytes_sent, counter.bytes_recv)
+        ul, dl = [(now - last) / (t1 - t0) / 1024 * 8
+                  for now, last in zip(tot, last_tot)]
+
+        global_network_rates['traffic_dl_kbits_sec'] = dl
+        global_network_rates['traffic_ul_kbits_sec'] = ul
+        t0 = time.time()
 
 def run(server_class=HTTPServer, handler_class=Server, port=8008, apikey=''):
+    # kick off the network monitoring thread(s)
+    global global_network_rates
+
+    # Create the ul/dl thread
+    tbandwidth = threading.Thread(target=calc_ul_dl)
+    tbandwidth.daemon = True
+    tbandwidth.start()
+
+    # Create the ping thread
+    tping = threading.Thread(target=ping)
+    tping.daemon = True
+    tping.start()
+
+    # Create the cputemp thread
+    tcputemp = threading.Thread(target=cputemp)
+    tcputemp.daemon = True
+    tcputemp.start()
+
+    # Create the fanspeed thread
+    tfan = threading.Thread(target=fanspeed)
+    tfan.daemon = True
+    tfan.start()
+
+    # Create the battery thread
+    tbattery = threading.Thread(target=batterystatus)
+    tbattery.daemon = True
+    tbattery.start()
+
     # set the api_key for authentication
     getapikey()
 
@@ -174,7 +242,7 @@ def run(server_class=HTTPServer, handler_class=Server, port=8008, apikey=''):
     print ('Authenticated with api_key:' +  global_api_key)
     print ('Help endpoint: http://localhost:' + str(port) + '/api/1.0/help?api_key=' + global_api_key) 
     httpd.serve_forever()
-    
+
 if __name__ == "__main__":
     from sys import argv
     
