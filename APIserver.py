@@ -179,7 +179,7 @@ def ping(server='8.8.8.8', count=3, wait_time=1):
             # just return the avg latency for this routine
             latency = timing[1]
             global_network_latency = timing[1]
-            time.sleep(3)
+            time.sleep(5)
 
         except Exception as e:
             print(e)
@@ -203,10 +203,7 @@ def calc_ul_dl(dt=3, interface='en0'):
         global_network_rates['traffic_ul_kbits_sec'] = ul
         t0 = time.time()
 
-def run(server_class=HTTPServer, handler_class=Server, port=8008, apikey=''):
-    # kick off the network monitoring thread(s)
-    global global_network_rates
-
+def startworkerthreads():
     # Create the ul/dl thread
     tbandwidth = threading.Thread(target=calc_ul_dl)
     tbandwidth.daemon = True
@@ -231,6 +228,10 @@ def run(server_class=HTTPServer, handler_class=Server, port=8008, apikey=''):
     tbattery = threading.Thread(target=batterystatus)
     tbattery.daemon = True
     tbattery.start()
+
+def run(server_class=HTTPServer, handler_class=Server, port=8008, apikey=''):
+    # start the worker threads
+    startworkerthreads()
 
     # set the api_key for authentication
     getapikey()
